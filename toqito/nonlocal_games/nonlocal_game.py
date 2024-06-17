@@ -196,15 +196,15 @@ class NonlocalGame:
                 )
             tgval = np.sum(np.amax(pred_alice, axis=0))
             if tgval > p_win:
-                bob_win_strategy = b_ind
-                alice_win_strategy = np.argmax(pred_alice, axis=0)
+                bob_opt_strategy = b_ind
+                alice_opt_strategy = np.argmax(pred_alice, axis=0)
                 p_win = tgval
             # p_win = max(p_win, tgval)
 
         return {
             "classical_value": p_win,
-            "bob_strategy": bob_win_strategy,
-            "alice_strategy": alice_win_strategy,
+            "bob_strategy": bob_opt_strategy,
+            "alice_strategy": alice_opt_strategy,
         }
 
     def quantum_value_lower_bound(
@@ -378,11 +378,23 @@ class NonlocalGame:
 
                 # As the SDPs keep alternating, check if the winning probability
                 # becomes any higher. If so, replace with new best.
-                best = max(best, lower_bound)
+                if lower_bound > best:
+                    # best = max(best, lower_bound)
+                    best = lower_bound
+                    bob_best = bob_povms
+                    alice_best = alice_povms
 
-            best_lower_bound = max(best, best_lower_bound)
+            # best_lower_bound = max(best, best_lower_bound)
+            if best > best_lower_bound:
+                best_lower_bound = best
+                bob_best_lower_bound = bob_best
+                alice_best_lower_bound = alice_best
 
-        return best_lower_bound
+        return {
+            "quantum_lower_bound": best_lower_bound,
+            "bob_strategy": bob_best_lower_bound,
+            "alice_strategy": alice_best_lower_bound,
+        }
 
     def __optimize_alice(self, dim, bob_povms) -> tuple[dict, float]:
         """Fix Bob's measurements and optimize over Alice's measurements."""
