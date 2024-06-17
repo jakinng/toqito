@@ -29,7 +29,9 @@ class NonlocalGame:
 
     """
 
-    def __init__(self, prob_mat: np.ndarray, pred_mat: np.ndarray, reps: int = 1) -> None:
+    def __init__(
+        self, prob_mat: np.ndarray, pred_mat: np.ndarray, reps: int = 1
+    ) -> None:
         """Construct nonlocal game object.
 
         :param prob_mat: A matrix whose (x, y)-entry gives the probability
@@ -71,7 +73,9 @@ class NonlocalGame:
             self.reps = reps
 
     @classmethod
-    def from_bcs_game(cls, constraints: list[np.ndarray], reps: int = 1) -> "NonlocalGame":
+    def from_bcs_game(
+        cls, constraints: list[np.ndarray], reps: int = 1
+    ) -> "NonlocalGame":
         """Construct nonlocal game object from a binary constraint system game.
 
         :raises ValueError: At least one constraint needs to be supplied.
@@ -126,7 +130,9 @@ class NonlocalGame:
                     # is consistent with Alice's
                     b_ans = truth_assignment[y_ques]
 
-                    pred_mat[a_ans, b_ans, x_ques, y_ques] = constraints[x_ques][truth_assignment]
+                    pred_mat[a_ans, b_ans, x_ques, y_ques] = constraints[x_ques][
+                        truth_assignment
+                    ]
 
         return cls(prob_mat, pred_mat, reps)
 
@@ -147,9 +153,11 @@ class NonlocalGame:
         for x_alice_in in range(num_alice_inputs):
             for y_bob_in in range(num_bob_inputs):
                 self.pred_mat[:, :, x_alice_in, y_bob_in] = (
-                    self.prob_mat[x_alice_in, y_bob_in] * self.pred_mat[:, :, x_alice_in, y_bob_in]
+                    self.prob_mat[x_alice_in, y_bob_in]
+                    * self.pred_mat[:, :, x_alice_in, y_bob_in]
                 )
         p_win = float("-inf")
+        # Swaps Alice and Bob so that Alice has more outputs * inputs
         if num_alice_outputs**num_alice_inputs < num_bob_outputs**num_bob_inputs:
             self.pred_mat = np.transpose(self.pred_mat, (1, 0, 3, 2))
             (
@@ -158,30 +166,46 @@ class NonlocalGame:
                 num_alice_inputs,
                 num_bob_inputs,
             ) = self.pred_mat.shape
+
+        # Alice output, Alice input, Bob output, Bob input
         self.pred_mat = np.transpose(self.pred_mat, (0, 2, 1, 3))
 
-        # Paralleize for loop.
+        # Parallelize for loop.
         # if num_bob_outputs ** num_bob_inputs <= 10 ** 6:
         #     parallel_threads = 1
         # else:
         #     parallel_threads = 5
 
-        for i in range(num_alice_outputs**num_bob_inputs):
+        # Enumerate over Bob's possible strategies, and find Alice's optimal strategy in that case
+        for i in range(num_bob_outputs**num_bob_inputs):
             # Convert :code:`number` to the base :code:`base` with digits :code:`digits`.
             number = i
             base = num_bob_outputs
             digits = num_bob_inputs
+            # On input y_bob_in, Bob's straegy is to return output b_ind[y_bob_in]
             b_ind = np.zeros(digits)
             for j in range(digits):
                 b_ind[digits - j - 1] = np.mod(number, base)
                 number = np.floor(number / base)
+
             pred_alice = np.zeros((num_alice_outputs, num_alice_inputs))
 
             for y_bob_in in range(num_bob_inputs):
-                pred_alice = pred_alice + self.pred_mat[:, :, int(b_ind[y_bob_in]), y_bob_in]
+                pred_alice = (
+                    pred_alice + self.pred_mat[:, :, int(b_ind[y_bob_in]), y_bob_in]
+                )
             tgval = np.sum(np.amax(pred_alice, axis=0))
-            p_win = max(p_win, tgval)
-        return p_win
+            if tgval > p_win:
+                bob_win_strategy = b_ind
+                alice_win_strategy = np.argmax(pred_alice, axis=0)
+                p_win = tgval
+            # p_win = max(p_win, tgval)
+
+        return {
+            "classical_value": p_win,
+            "bob_strategy": bob_win_strategy,
+            "alice_strategy": alice_win_strategy,
+        }
 
     def quantum_value_lower_bound(
         self,
@@ -393,7 +417,10 @@ class NonlocalGame:
                             win += (
                                 self.prob_mat[x_ques, y_ques]
                                 * self.pred_mat[a_ans, b_ans, x_ques, y_ques]
-                                * cvxpy.trace(bob_povms[y_ques, b_ans].conj().T @ alice_povms[x_ques, a_ans])
+                                * cvxpy.trace(
+                                    bob_povms[y_ques, b_ans].conj().T
+                                    @ alice_povms[x_ques, a_ans]
+                                )
                             )
                         if isinstance(
                             bob_povms[y_ques, b_ans],
@@ -403,7 +430,10 @@ class NonlocalGame:
                             win += (
                                 self.prob_mat[x_ques, y_ques]
                                 * self.pred_mat[a_ans, b_ans, x_ques, y_ques]
-                                * cvxpy.trace(bob_povms[y_ques, b_ans].value.conj().T @ alice_povms[x_ques, a_ans])
+                                * cvxpy.trace(
+                                    bob_povms[y_ques, b_ans].value.conj().T
+                                    @ alice_povms[x_ques, a_ans]
+                                )
                             )
 
         objective = cvxpy.Maximize(cvxpy.real(win))
@@ -451,7 +481,10 @@ class NonlocalGame:
                         win += (
                             self.prob_mat[x_ques, y_ques]
                             * self.pred_mat[a_ans, b_ans, x_ques, y_ques]
-                            * cvxpy.trace(bob_povms[y_ques, b_ans].H @ alice_povms[x_ques, a_ans].value)
+                            * cvxpy.trace(
+                                bob_povms[y_ques, b_ans].H
+                                @ alice_povms[x_ques, a_ans].value
+                            )
                         )
 
         objective = cvxpy.Maximize(cvxpy.real(win))
@@ -486,7 +519,9 @@ class NonlocalGame:
             for b_out in range(bob_out):
                 for x_in in range(alice_in):
                     for y_in in range(bob_in):
-                        k_var[a_out, b_out, x_in, y_in] = cvxpy.Variable((dim_x, dim_y), hermitian=True)
+                        k_var[a_out, b_out, x_in, y_in] = cvxpy.Variable(
+                            (dim_x, dim_y), hermitian=True
+                        )
                         constraints.append(k_var[a_out, b_out, x_in, y_in] >> 0)
 
         # Define \sigma_a^x variable.
@@ -510,7 +545,8 @@ class NonlocalGame:
                 for x_in in range(alice_in):
                     for y_in in range(bob_in):
                         p_win += self.prob_mat[x_in, y_in] * cvxpy.trace(
-                            self.pred_mat[a_out, b_out, x_in, y_in].conj().T * k_var[a_out, b_out, x_in, y_in]
+                            self.pred_mat[a_out, b_out, x_in, y_in].conj().T
+                            * k_var[a_out, b_out, x_in, y_in]
                         )
 
         objective = cvxpy.Maximize(cvxpy.real(p_win))
@@ -560,6 +596,11 @@ class NonlocalGame:
 
         problem = cvxpy.Problem(objective, constraints)
         ns_val = problem.solve()
+        # if problem.status not in ["infeasible", "unbounded"]:
+        #     # Otherwise, problem.value is inf or -inf, respectively.
+        #     print("Optimal value: %s" % problem.value)
+        #     for variable in problem.variables():
+        #         print("Variable %s: value %s" % (variable.name(), variable.value))
 
         return ns_val
 
@@ -590,7 +631,9 @@ class NonlocalGame:
         mat = defaultdict(cvxpy.Variable)
         for x_in in range(alice_in):
             for y_in in range(bob_in):
-                mat[x_in, y_in] = cvxpy.Variable((alice_out, bob_out), name=f"M(a, b | {x_in}, {y_in})")
+                mat[x_in, y_in] = cvxpy.Variable(
+                    (alice_out, bob_out), name=f"M(a, b | {x_in}, {y_in})"
+                )
 
         p_win = cvxpy.Constant(0)
         for a_out in range(alice_out):
