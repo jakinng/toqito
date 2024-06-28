@@ -468,6 +468,82 @@ class NonlocalGame:
         lower_bound = problem.solve()
         return alice_povms, lower_bound
 
+    """
+    Optimize Alice's measurements when Bob's measurements are fixed, but make Alice's POVMs sum to the identity
+    """
+
+    def __optimize_alice_identity(self, dim, bob_povms) -> tuple[dict, float]:
+        """Fix Bob's measurements and optimize over Alice's measurements."""
+        # Get number of inputs and outputs.
+        (
+            num_outputs_alice,
+            num_outputs_bob,
+            num_inputs_alice,
+            num_inputs_bob,
+        ) = self.pred_mat.shape
+
+        # The cvxpy package does not support optimizing over 4-dimensional
+        # objects. To overcome this, we use a dictionary to index between the
+        # questions and answers, while the cvxpy variables held at this
+        # positions are `dim`-by-`dim` cvxpy variables.
+        alice_povms = defaultdict(cvxpy.Variable)
+        for x_ques in range(num_inputs_alice):
+            for a_ans in range(num_outputs_alice):
+                alice_povms[x_ques, a_ans] = cvxpy.Variable((dim, dim), hermitian=True)
+
+        # .. math::
+        #    \sum_{(x,y) \in \Sigma} \pi(x, y) V(a,b|x,y) \ip{B_b^y}{A_a^x}
+        win = 0
+        for x_ques in range(num_inputs_alice):
+            for y_ques in range(num_inputs_bob):
+                for a_ans in range(num_outputs_alice):
+                    for b_ans in range(num_outputs_bob):
+                        if isinstance(bob_povms[y_ques, b_ans], np.ndarray):
+                            win += (
+                                1
+                                / dim
+                                * (
+                                    self.prob_mat[x_ques, y_ques]
+                                    * self.pred_mat[a_ans, b_ans, x_ques, y_ques]
+                                    * cvxpy.trace(
+                                        bob_povms[y_ques, b_ans].conj().T
+                                        @ alice_povms[x_ques, a_ans]
+                                    )
+                                )
+                            )
+                        if isinstance(
+                            bob_povms[y_ques, b_ans],
+                            cvxpy.expressions.variable.Variable,
+                        ):
+                            win += (
+                                1
+                                / dim
+                                * (
+                                    self.prob_mat[x_ques, y_ques]
+                                    * self.pred_mat[a_ans, b_ans, x_ques, y_ques]
+                                    * cvxpy.trace(
+                                        bob_povms[y_ques, b_ans].value.conj().T
+                                        @ alice_povms[x_ques, a_ans]
+                                    )
+                                )
+                            )
+
+        objective = cvxpy.Maximize(cvxpy.real(win))
+        constraints = []
+
+        # Sum over "a" for all "x" for Alice's measurements.
+        for x_ques in range(num_inputs_alice):
+            alice_sum_a = 0
+            for a_ans in range(num_outputs_alice):
+                alice_sum_a += alice_povms[x_ques, a_ans]
+                constraints.append(alice_povms[x_ques, a_ans] >> 0)
+            constraints.append(alice_sum_a == np.identity(dim))
+
+        problem = cvxpy.Problem(objective, constraints)
+
+        lower_bound = problem.solve()
+        return alice_povms, lower_bound
+
     def __optimize_bob(self, dim, alice_povms) -> tuple[dict, float]:
         """Fix Alice's measurements and optimize over Bob's measurements."""
         # Get number of inputs and outputs.
@@ -496,6 +572,57 @@ class NonlocalGame:
                             * cvxpy.trace(
                                 bob_povms[y_ques, b_ans].H
                                 @ alice_povms[x_ques, a_ans].value
+                            )
+                        )
+
+        objective = cvxpy.Maximize(cvxpy.real(win))
+        constraints = []
+
+        # Sum over "b" for all "y" for Bob's measurements.
+        for y_ques in range(num_inputs_bob):
+            bob_sum_b = 0
+            for b_ans in range(num_outputs_bob):
+                bob_sum_b += bob_povms[y_ques, b_ans]
+                constraints.append(bob_povms[y_ques, b_ans] >> 0)
+            constraints.append(bob_sum_b == np.identity(dim))
+
+        problem = cvxpy.Problem(objective, constraints)
+
+        lower_bound = problem.solve()
+        return bob_povms, lower_bound
+
+    def __optimize_bob_identity(self, dim, alice_povms) -> tuple[dict, float]:
+        """Fix Alice's measurements and optimize over Bob's measurements."""
+        # Get number of inputs and outputs.
+        (
+            num_outputs_alice,
+            num_outputs_bob,
+            num_inputs_alice,
+            num_inputs_bob,
+        ) = self.pred_mat.shape
+
+        # Now, optimize over Bob's measurement operators and fix Alice's
+        # operators as those are coming from the previous SDP.
+        bob_povms = defaultdict(cvxpy.Variable)
+        for y_ques in range(num_inputs_bob):
+            for b_ans in range(num_outputs_bob):
+                bob_povms[y_ques, b_ans] = cvxpy.Variable((dim, dim), hermitian=True)
+
+        win = 0
+        for x_ques in range(num_inputs_alice):
+            for y_ques in range(num_inputs_bob):
+                for a_ans in range(num_outputs_alice):
+                    for b_ans in range(num_outputs_bob):
+                        win += (
+                            1
+                            / dim
+                            * (
+                                self.prob_mat[x_ques, y_ques]
+                                * self.pred_mat[a_ans, b_ans, x_ques, y_ques]
+                                * cvxpy.trace(
+                                    bob_povms[y_ques, b_ans].H
+                                    @ alice_povms[x_ques, a_ans].value
+                                )
                             )
                         )
 
