@@ -136,7 +136,7 @@ class NonlocalGame:
 
         return cls(prob_mat, pred_mat, reps)
 
-    def classical_value(self) -> float:
+    def classical_value(self, synchronous=False) -> float:
         """Compute the classical value of the nonlocal game.
 
         This function has been adapted from the QETLAB package.
@@ -188,18 +188,32 @@ class NonlocalGame:
                 b_ind[digits - j - 1] = np.mod(number, base)
                 number = np.floor(number / base)
 
-            pred_alice = np.zeros((num_alice_outputs, num_alice_inputs))
+            
+            if not synchronous:
+                pred_alice = np.zeros((num_alice_outputs, num_alice_inputs))
 
-            for y_bob_in in range(num_bob_inputs):
-                pred_alice = (
-                    pred_alice + self.pred_mat[:, :, int(b_ind[y_bob_in]), y_bob_in]
-                )
-            tgval = np.sum(np.amax(pred_alice, axis=0))
-            if tgval > p_win:
-                bob_opt_strategy = b_ind
-                alice_opt_strategy = np.argmax(pred_alice, axis=0)
-                p_win = tgval
-            # p_win = max(p_win, tgval)
+                for y_bob_in in range(num_bob_inputs):
+                    pred_alice = (
+                        pred_alice + self.pred_mat[:, :, int(b_ind[y_bob_in]), y_bob_in]
+                    )
+                tgval = np.sum(np.amax(pred_alice, axis=0))
+                if tgval > p_win:
+                    bob_opt_strategy = b_ind
+                    alice_opt_strategy = np.argmax(pred_alice, axis=0)
+                    p_win = tgval
+                # p_win = max(p_win, tgval)
+                        # p_win = max(p_win, tgval)
+            else: 
+                tgval = 0
+                for y_bob_in in range (num_bob_inputs):
+                    for x_alice_in in range(num_alice_inputs):
+                        tgval += self.pred_mat[int(b_ind[x_alice_in]), x_alice_in, int(b_ind[y_bob_in]), y_bob_in]
+                if tgval > p_win:
+                    bob_opt_strategy = b_ind
+                    alice_opt_strategy = b_ind
+                    p_win = tgval
+               
+                   
 
         return {
             "classical_value": p_win,
