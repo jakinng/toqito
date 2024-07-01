@@ -188,7 +188,6 @@ class NonlocalGame:
                 b_ind[digits - j - 1] = np.mod(number, base)
                 number = np.floor(number / base)
 
-            
             if not synchronous:
                 pred_alice = np.zeros((num_alice_outputs, num_alice_inputs))
 
@@ -202,18 +201,21 @@ class NonlocalGame:
                     alice_opt_strategy = np.argmax(pred_alice, axis=0)
                     p_win = tgval
                 # p_win = max(p_win, tgval)
-                        # p_win = max(p_win, tgval)
-            else: 
+                # p_win = max(p_win, tgval)
+            else:
                 tgval = 0
-                for y_bob_in in range (num_bob_inputs):
+                for y_bob_in in range(num_bob_inputs):
                     for x_alice_in in range(num_alice_inputs):
-                        tgval += self.pred_mat[int(b_ind[x_alice_in]), x_alice_in, int(b_ind[y_bob_in]), y_bob_in]
+                        tgval += self.pred_mat[
+                            int(b_ind[x_alice_in]),
+                            x_alice_in,
+                            int(b_ind[y_bob_in]),
+                            y_bob_in,
+                        ]
                 if tgval > p_win:
                     bob_opt_strategy = b_ind
                     alice_opt_strategy = b_ind
                     p_win = tgval
-               
-                   
 
         return {
             "classical_value": p_win,
